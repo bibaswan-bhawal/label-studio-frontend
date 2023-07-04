@@ -44,7 +44,7 @@ export const Tool = ({
       <Elem name="shortcut">
         {combos.map((combo, index) => {
           const keys = combo.split('+');
-
+          
           return (
             <Fragment key={`${keys.join('-')}-${index}`}>
               {keys.map(key => {

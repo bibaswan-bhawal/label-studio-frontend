@@ -8,7 +8,7 @@ import Canvas from '../utils/canvas';
 import { clamp, findClosestParent } from '../utils/utilities';
 import { DrawingTool } from '../mixins/DrawingTool';
 import { Tool } from '../components/Toolbar/Tool';
-import { Range } from '../common/Range/Range'; 
+import { Range } from '../common/Range/Range';
 import { NodeViews } from '../components/Node/Node';
 import { FF_DEV_3666, FF_DEV_4081, isFF } from '../utils/feature-flags';
 
@@ -23,7 +23,7 @@ const IconDot = ({ size }) => {
       height: size,
       background: 'rgba(0, 0, 0, 0.25)',
       borderRadius: '100%',
-    }}/>
+    }} />
   );
 };
 
@@ -79,8 +79,8 @@ const _Tool = types
           max={MAX_SIZE}
           reverse
           align="vertical"
-          minIcon={<IconDot size={8}/>}
-          maxIcon={<IconDot size={16}/>}
+          minIcon={<IconDot size={8} />}
+          maxIcon={<IconDot size={16} />}
           onChange={(value) => {
             self.setStroke(value);
           }}

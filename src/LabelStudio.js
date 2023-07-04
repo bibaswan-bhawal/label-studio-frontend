@@ -47,7 +47,7 @@ export class LabelStudio {
     this.events.on(...args);
   }
 
-  off(eventName, callback){
+  off(eventName, callback) {
     if (isDefined(callback)) {
       this.events.off(eventName, callback);
     } else {
