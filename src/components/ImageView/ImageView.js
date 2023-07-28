@@ -790,6 +790,10 @@ export default observer(
         this.handleDeferredMouseDown?.();
       }
 
+      if (e.type === 'touchmove' && e.evt.touches.length > 1) {
+        console.log('touchmove with more than 1 touch');
+      }
+
       // Handle zooming
       if ((isMouseWheelClick || isShiftDrag) && item.zoomScale > 1) {
         item.setSkipInteractions(true);
@@ -849,6 +853,7 @@ export default observer(
       } else if (mouseposY >= stageHeight) {
         e.offsetY = stageHeight;
       }
+
       this.handleMouseMove(newEvent);
     };
 

@@ -140,10 +140,13 @@ const _Tool = types
 
       mouseupEv(ev, _, [x, y]) {
         if (self.mode !== 'drawing') return;
+
         self.addPoint(x, y);
+
         self.mode = 'viewing';
         brush.setDrawing(false);
         brush.endPath();
+
         if (isFirstBrushStroke) {
           setTimeout(() => {
             const newBrush = self.commitDrawingRegion();
@@ -160,14 +163,12 @@ const _Tool = types
 
       mousemoveEv(ev, _, [x, y]) {
         if (self.mode !== 'drawing') return;
-        if (
-          !findClosestParent(
-            ev.target,
-            el => el === self.obj.stageRef.content,
-            el => el.parentElement,
-          )
-        )
-          return;
+
+        if (ev.touches && ev.touches.length >= 1) {
+          console.log('touch move event in brush tool');
+        }
+
+        if (!findClosestParent(ev.target, el => el === self.obj.stageRef.content, el => el.parentElement)) return;
 
         self.addPoint(x, y);
       },
@@ -181,6 +182,7 @@ const _Tool = types
           )
         )
           return;
+
         const c = self.control;
         const o = self.obj;
 
@@ -189,6 +191,10 @@ const _Tool = types
         // prevent drawing when current image is
         // different from image where the brush was started
         if (o && brush && o.multiImage && o.currentImage !== brush.item_index) return;
+
+        if (ev.touches && ev.touches.length >= 1) {
+          console.log('touch start event in brush tool');
+        }
 
         // Reset the timer if a user started drawing again
         if (brush && brush.type === 'brushregion') {

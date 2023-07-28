@@ -129,12 +129,12 @@ const _Tool = types
     },
 
     mousemoveEv(ev) {
-      // console.log('mouse move', ev);
-
       const zoomScale = self.obj.zoomScale;
 
       // Handle two finger zooming
       if (ev.touches && ev.touches.length > 1) {
+        console.log('touch move event in zoom pan tool');
+
         if (self.previousTouchEvent !== null && self.previousTouchEvent.touches && self.previousTouchEvent.touches.length > 1) {
           const dist1 = calculateDistance(ev.touches[0], ev.touches[1]);
           const dist2 = calculateDistance(self.previousTouchEvent.touches[0], self.previousTouchEvent.touches[1]);
@@ -147,6 +147,7 @@ const _Tool = types
             self.handleZoom(-1);
           } else {
             if (zoomScale <= 1) return;
+
             if (self.mode === 'moving') {
               self.handleDrag(ev);
               self.stageContainer.style.cursor = 'grabbing';
@@ -155,6 +156,7 @@ const _Tool = types
         }
       } else {
         if (zoomScale <= 1) return;
+
         if (self.mode === 'moving') {
           self.handleDrag(ev);
           self.stageContainer.style.cursor = 'grabbing';
@@ -168,9 +170,11 @@ const _Tool = types
       // don't pan on right click
       if (ev.button === 2) return;
 
-      // if (ev.touches && self.previousTouchEvent === null) {
+      if (ev.touches && ev.touches.length >= 1) {
+        console.log('touch start event in zoom pan tool');
+      }
+
       self.previousTouchEvent = ev;
-      // }
 
       self.mode = 'moving';
       self.stageContainer.style.cursor = 'grabbing';
