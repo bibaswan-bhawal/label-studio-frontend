@@ -112,9 +112,9 @@ const DrawingRegion = observer(({ item }) => {
   );
 });
 
-const SELECTION_COLOR = '#40A9FF';
+const SELECTION_COLOR = 'black';
 const SELECTION_SECOND_COLOR = 'white';
-const SELECTION_DASH = [3, 3];
+const SELECTION_DASH = [5, 10];
 
 /**
  * Multiple selected regions when transform is unavailable — just a box with anchors
@@ -334,11 +334,17 @@ const SelectionLayer = observer(({ item, selectionArea }) => {
     window.addEventListener('keyup', handleKey);
     window.addEventListener('mousedown', dragHandler);
     window.addEventListener('mouseup', dragHandler);
+    // Touch support
+    window.addEventListener('touchstart', dragHandler);
+    window.addEventListener('touchend', dragHandler);
     return () => {
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('keyup', handleKey);
       window.removeEventListener('mousedown', dragHandler);
       window.removeEventListener('mouseup', dragHandler);
+      //touch support
+      window.addEventListener('touchstart', dragHandler);
+      window.addEventListener('touchend', dragHandler);
     };
   }, []);
 
@@ -394,6 +400,7 @@ const Selection = observer(({ item, selectionArea, ...triggeredOnResize }) => {
   );
 });
 
+/* Brush crosshair */
 const Crosshair = memo(forwardRef(({ width, height }, ref) => {
   const [pointsV, setPointsV] = useState([50, 0, 50, height]);
   const [pointsH, setPointsH] = useState([0, 100, width, 100]);
@@ -490,6 +497,7 @@ export default observer(
     deferredClickTimeout = [];
     skipMouseUp = false;
     mouseDownPoint = null;
+    touchIdentifer = null;
 
     constructor(props) {
       super(props);
@@ -504,6 +512,7 @@ export default observer(
       if (isFF(FF_DEV_1442)) {
         this.handleDeferredMouseDown?.();
       }
+
       if (this.skipMouseUp) {
         this.skipMouseUp = false;
         return;
@@ -552,8 +561,78 @@ export default observer(
       }, this.props.item.annotation.isDrawing ? 0 : 100));
     };
 
-    handleMouseDown = e => {
+    preventDefaultTouch = e => {
+      if (e.type.startsWith('touch')) {
+        e.preventDefault();
+      }
+    };
+
+    handleGlobalMouseUp = e => {
+      if (e.type === 'touchend') {
+        window.removeEventListener('touchmove', this.handleGlobalMouseMove);
+        window.removeEventListener('touchend', this.handleGlobalMouseUp);
+      } else {
+        window.removeEventListener('mousemove', this.handleGlobalMouseMove);
+        window.removeEventListener('mouseup', this.handleGlobalMouseUp);
+      }
+
+      if (e.target && e.target.tagName === 'CANVAS') return;
+
       const { item } = this.props;
+
+      let offsetX;
+      let offsetY;
+
+      if (e.type === 'touchend') {
+        for (const touch of e.changedTouches) {
+          if (touch.identifier === this.touchIdentifer) {
+            offsetX = touch.clientX - this.canvasX;
+            offsetY = touch.clientY - this.canvasY;
+
+            this.touchIdentifer = null;
+            break;
+          }
+        }
+      } else {
+        offsetX = e.clientX - this.canvasX;
+        offsetY = e.clientY - this.canvasY;
+      }
+
+      item.freezeHistory();
+
+      return item.event('mouseup', e, offsetX, offsetY);
+    };
+
+    handleGlobalMouseMove = e => {
+      if (e.target && e.target.tagName === 'CANVAS') return;
+
+      const { item } = this.props;
+
+      let offsetX;
+      let offsetY;
+
+      if (e.type === 'touchmove') {
+        for (const touch of e.changedTouches) {
+          if (touch.identifier === this.touchIdentifer) {
+            offsetX = touch.clientX - this.canvasX;
+            offsetY = touch.clientY - this.canvasY;
+
+            this.touchIdentifer = null;
+            break;
+          }
+        }
+      } else {
+        offsetX = e.clientX - this.canvasX;
+        offsetY = e.clientY - this.canvasY;
+      }
+
+      return item.event('mousemove', e, offsetX, offsetY);
+    };
+
+    handleMouseDown = e => {
+      this.preventDefaultTouch(e.evt);
+      const { item } = this.props;
+
       const isPanTool = item.getToolsManager().findSelectedTool()?.fullName === 'ZoomPanTool';
 
       if (isFF(FF_LSDV_4930)) {
@@ -577,16 +656,48 @@ export default observer(
             el => el.nodeType === 'Group' && ['ruler', 'segmentation'].indexOf(el?.attrs?.name) > -1,
           )
         ) {
-          window.addEventListener('mousemove', this.handleGlobalMouseMove);
-          window.addEventListener('mouseup', this.handleGlobalMouseUp);
-          const { offsetX: x, offsetY: y } = e.evt;
           // store the canvas coords for calculations in further events
-          const { left, top } = item.containerRef.getBoundingClientRect();
+          const { left, top, right, bottom } = item.containerRef.getBoundingClientRect();
 
           this.canvasX = left;
           this.canvasY = top;
-          item.event('mousedown', e, x, y);
 
+          let offsetX;
+          let offsetY;
+
+          if (e.type === 'touchstart') { // handle touch events
+            const event = e.evt;
+
+            if (event.touches.length === 1 && this.touchIdentifer === null) {
+              const touch = event.touches[0];
+
+              window.addEventListener('touchmove', this.handleGlobalMouseMove);
+              window.addEventListener('touchend', this.handleGlobalMouseUp);
+
+              offsetX = touch.clientX - left;
+              offsetY = touch.clientY - top;
+
+              this.touchIdentifer = touch.identifier;
+
+              // Clamp offsets
+              offsetX = Math.max(0, Math.min(offsetX, right - left));
+              offsetY = Math.max(0, Math.min(offsetY, bottom - top));
+            } else {
+              return;
+            }
+          } else if (e.type === 'mousedown') { // handle mouse events
+            const event = e.evt;
+
+            window.addEventListener('mousemove', this.handleGlobalMouseMove);
+            window.addEventListener('mouseup', this.handleGlobalMouseUp);
+
+            offsetX = event.clientX - left;
+            offsetY = event.clientY - top;
+          } else {
+            return;
+          }
+
+          item.event('mousedown', e, offsetX, offsetY);
           return true;
         }
       };
@@ -626,49 +737,45 @@ export default observer(
     };
 
     /**
-     * Mouse up outside the canvas
-     */
-    handleGlobalMouseUp = e => {
-      window.removeEventListener('mousemove', this.handleGlobalMouseMove);
-      window.removeEventListener('mouseup', this.handleGlobalMouseUp);
-
-      if (e.target && e.target.tagName === 'CANVAS') return;
-
-      const { item } = this.props;
-      const { clientX: x, clientY: y } = e;
-
-      item.freezeHistory();
-
-      return item.event('mouseup', e, x - this.canvasX, y - this.canvasY);
-    };
-
-    handleGlobalMouseMove = e => {
-      if (e.target && e.target.tagName === 'CANVAS') return;
-
-      const { item } = this.props;
-      const { clientX: x, clientY: y } = e;
-
-      return item.event('mousemove', e, x - this.canvasX, y - this.canvasY);
-    };
-
-    /**
      * Mouse up on Stage
      */
     handleMouseUp = e => {
+      this.preventDefaultTouch(e.evt);
       const { item } = this.props;
+      const event = e.evt;
 
       if (isFF(FF_DEV_1442)) {
         this.resetDeferredClickTimeout();
       }
 
+      let offsetX;
+      let offsetY;
+
+      if (e.type === 'touchend') {
+        for (const touch of event.changedTouches) {
+          if (touch.identifier === this.touchIdentifer) {
+            offsetX = touch.clientX - this.canvasX;
+            offsetY = touch.clientY - this.canvasY;
+
+            this.touchIdentifer = null; // reset the touch identifier
+            break;
+          }
+        }
+      } else {
+        offsetX = event.clientX - this.canvasX;
+        offsetY = event.clientY - this.canvasY;
+      }
+
       item.freezeHistory();
       item.setSkipInteractions(false);
 
-      return item.event('mouseup', e, e.evt.offsetX, e.evt.offsetY);
+      return item.event('mouseup', e, offsetX, offsetY);
     };
 
     handleMouseMove = e => {
+      this.preventDefaultTouch(e.evt);
       const { item } = this.props;
+      const event = e.evt;
 
       item.freezeHistory();
 
@@ -683,6 +790,11 @@ export default observer(
         this.handleDeferredMouseDown?.();
       }
 
+      if (e.type === 'touchmove' && e.evt.touches.length > 1) {
+        console.log('touchmove with more than 1 touch');
+      }
+
+      // Handle zooming
       if ((isMouseWheelClick || isShiftDrag) && item.zoomScale > 1) {
         item.setSkipInteractions(true);
         e.evt.preventDefault();
@@ -693,9 +805,56 @@ export default observer(
         };
 
         item.setZoomPosition(newPos.x, newPos.y);
-      } else {
-        item.event('mousemove', e, e.evt.offsetX, e.evt.offsetY);
+      } else { // handle brush movement
+        let offsetX;
+        let offsetY;
+
+        if (e.type === 'touchmove') {
+          for (const touch of event.touches) {
+            if (touch.identifier === this.touchIdentifer) {
+              offsetX = touch.clientX - this.canvasX;
+              offsetY = touch.clientY - this.canvasY;
+              break;
+            }
+          }
+        } else {
+          offsetX = event.clientX - this.canvasX;
+          offsetY = event.clientY - this.canvasY;
+        }
+
+        return item.event('mousemove', e, offsetX, offsetY);
       }
+    };
+
+    handleMouseEnter = () => {
+      if (this.crosshairRef.current) {
+        this.crosshairRef.current.updateVisibility(true);
+      }
+    };
+
+    handleMouseLeave = (e) => {
+      const { item } = this.props;
+
+      if (this.crosshairRef.current) {
+        this.crosshairRef.current.updateVisibility(false);
+      }
+      const { width: stageWidth, height: stageHeight } = item.canvasSize;
+      const { offsetX: mouseposX, offsetY: mouseposY } = e.evt;
+      const newEvent = { ...e };
+
+      if (mouseposX <= 0) {
+        e.offsetX = 0;
+      } else if (mouseposX >= stageWidth) {
+        e.offsetX = stageWidth;
+      }
+
+      if (mouseposY <= 0) {
+        e.offsetY = 0;
+      } else if (mouseposY >= stageHeight) {
+        e.offsetY = stageHeight;
+      }
+
+      this.handleMouseMove(newEvent);
     };
 
     updateCrosshair = (e) => {
@@ -745,6 +904,7 @@ export default observer(
          */
         e.evt.preventDefault();
       }
+
       if (e.evt) {
         const { item } = this.props;
         const stage = item.stageRef;
@@ -861,7 +1021,6 @@ export default observer(
     }
 
     render() {
-
       const { item, store } = this.props;
 
       // @todo stupid but required check for `resetState()`
@@ -929,10 +1088,7 @@ export default observer(
       ) || !isFF(FF_LSDV_4583_6);
 
       return (
-        <ObjectTag
-          item={item}
-          className={wrapperClasses.join(' ')}
-        >
+        <ObjectTag item={item} className={wrapperClasses.join(' ')}>
           {paginationEnabled ? (
             <div className={styles.pagination}>
               <Pagination
@@ -940,10 +1096,7 @@ export default observer(
                 outline={false}
                 align="left"
                 noPadding
-                hotkey={{
-                  prev: 'image:prev',
-                  next: 'image:next',
-                }}
+                hotkey={{ prev: 'image:prev', next: 'image:next' }}
                 currentPage={item.currentImage + 1}
                 totalPages={item.parsedValueList.length}
                 onChange={n => item.setCurrentImage(n - 1)}
@@ -961,9 +1114,7 @@ export default observer(
             style={containerStyle}
           >
             <div
-              ref={node => {
-                this.filler = node;
-              }}
+              ref={node => { this.filler = node; }}
               className={styles.filler}
               style={{ width: '100%', marginTop: item.fillerHeight }}
             />
@@ -982,10 +1133,7 @@ export default observer(
               />
             ) : (
               <div
-                className={[
-                  styles.frame,
-                  ...imagePositionClassnames,
-                ].join(' ')}
+                className={[styles.frame, ...imagePositionClassnames].join(' ')}
                 style={item.canvasSize}
               >
                 <img
@@ -993,7 +1141,7 @@ export default observer(
                     item.setImageRef(ref);
                     this.imageRef.current = ref;
                   }}
-                  loading={(isFF(FF_DEV_3077) && !item.lazyoff) && 'lazy'}
+                  loading={(isFF(FF_DEV_3077) && !item.lazyoff) ? 'lazy' : 'eager'}
                   style={item.imageTransform}
                   src={item.currentSrc}
                   onLoad={(e) => {
@@ -1007,9 +1155,7 @@ export default observer(
                 {isFF(FF_DEV_4081) ? (
                   <canvas
                     className={styles.overlay}
-                    ref={ref => {
-                      item.setOverlayRef(ref);
-                    }}
+                    ref={ref => { item.setOverlayRef(ref); }}
                     style={item.imageTransform}
                   />
                 ) : null}
@@ -1020,12 +1166,8 @@ export default observer(
               <div className={styles.loading}><LoadingOutlined /></div>
             ) : (imageIsLoaded) ? (
               <Stage
-                ref={ref => {
-                  item.setStageRef(ref);
-                }}
-                className={[styles['image-element'],
-                  ...imagePositionClassnames,
-                ].join(' ')}
+                ref={ref => { item.setStageRef(ref); }}
+                className={[styles['image-element'], ...imagePositionClassnames].join(' ')}
                 width={item.canvasSize.width}
                 height={item.canvasSize.height}
                 scaleX={item.zoomScale}
@@ -1036,38 +1178,16 @@ export default observer(
                 offsetY={item.stageTranslate.y}
                 rotation={item.rotation}
                 onClick={this.handleOnClick}
-                onMouseEnter={() => {
-                  if (this.crosshairRef.current) {
-                    this.crosshairRef.current.updateVisibility(true);
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (this.crosshairRef.current) {
-                    this.crosshairRef.current.updateVisibility(false);
-                  }
-                  const { width: stageWidth, height: stageHeight } = item.canvasSize;
-                  const { offsetX: mouseposX, offsetY: mouseposY } = e.evt;
-                  const newEvent = { ...e };
-
-                  if (mouseposX <= 0) {
-                    e.offsetX = 0;
-                  } else if (mouseposX >= stageWidth) {
-                    e.offsetX = stageWidth;
-                  }
-
-                  if (mouseposY <= 0) {
-                    e.offsetY = 0;
-                  } else if (mouseposY >= stageHeight) {
-                    e.offsetY = stageHeight;
-                  }
-                  this.handleMouseMove(newEvent);
-                }}
+                onMouseEnter={this.handleMouseEnter}
+                onMouseLeave={this.handleMouseLeave}
                 onDragMove={this.updateCrosshair}
                 onMouseDown={this.handleMouseDown}
                 onMouseMove={this.handleMouseMove}
                 onMouseUp={this.handleMouseUp}
-                onWheel={item.zoom ? this.handleZoom : () => {
-                }}
+                onTouchStart={this.handleMouseDown}
+                onTouchMove={this.handleMouseMove}
+                onTouchEnd={this.handleMouseUp}
+                onWheel={item.zoom ? this.handleZoom : () => { }}
               >
                 {/* Hack to keep stage in place when there's no regions */}
                 {regions.length === 0 && (

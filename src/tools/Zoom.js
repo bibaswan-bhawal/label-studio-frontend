@@ -64,6 +64,13 @@ const ToolView = observer(({ item }) => {
   );
 });
 
+function calculateDistance(touch1, touch2) {
+  const deltaX = touch1.clientX - touch2.clientX;
+  const deltaY = touch1.clientY - touch2.clientY;
+
+  return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+}
+
 const _Tool = types
   .model('ZoomPanTool', {
     // image: types.late(() => types.safeReference(Registry.getModelByTag("image")))
@@ -85,12 +92,12 @@ const _Tool = types
 
     mouseupEv() {
       self.mode = 'viewing';
+      self.previousTouchEvent = null;
       self.stageContainer.style.cursor = 'grab';
     },
 
     updateCursor() {
       if (!self.selected || !self.obj?.stageRef) return;
-
       self.stageContainer.style.cursor = 'grab';
     },
 
@@ -100,8 +107,23 @@ const _Tool = types
 
     handleDrag(ev) {
       const item = self.obj;
-      const posx = item.zoomingPositionX + ev.movementX;
-      const posy = item.zoomingPositionY + ev.movementY;
+
+      let offsetX;
+      let offsetY;
+
+      // it is a mouse event
+      if (ev.movementX !== undefined && self.previousTouchEvent.movementX !== undefined) {
+        offsetX = ev.clientX - self.previousTouchEvent.clientX;
+        offsetY = ev.clientY - self.previousTouchEvent.clientY;
+      } else if (ev.movementX === undefined && self.previousTouchEvent.movementX === undefined) { // it is a touch event
+        offsetX = ev.touches[0].clientX - self.previousTouchEvent.touches[0].clientX;
+        offsetY = ev.touches[0].clientY - self.previousTouchEvent.touches[0].clientY;
+      } else {
+        return;
+      }
+
+      const posx = item.zoomingPositionX + offsetX;
+      const posy = item.zoomingPositionY + offsetY;
 
       item.setZoomPosition(posx, posy);
     },
@@ -109,16 +131,50 @@ const _Tool = types
     mousemoveEv(ev) {
       const zoomScale = self.obj.zoomScale;
 
-      if (zoomScale <= 1) return;
-      if (self.mode === 'moving') {
-        self.handleDrag(ev);
-        self.stageContainer.style.cursor = 'grabbing';
+      // Handle two finger zooming
+      if (ev.touches && ev.touches.length > 1) {
+        console.log('touch move event in zoom pan tool');
+
+        if (self.previousTouchEvent !== null && self.previousTouchEvent.touches && self.previousTouchEvent.touches.length > 1) {
+          const dist1 = calculateDistance(ev.touches[0], ev.touches[1]);
+          const dist2 = calculateDistance(self.previousTouchEvent.touches[0], self.previousTouchEvent.touches[1]);
+
+          const pinchAmount = dist1 - dist2;
+
+          if (pinchAmount > 4) {
+            self.handleZoom(1);
+          } else if (pinchAmount < -4) {
+            self.handleZoom(-1);
+          } else {
+            if (zoomScale <= 1) return;
+
+            if (self.mode === 'moving') {
+              self.handleDrag(ev);
+              self.stageContainer.style.cursor = 'grabbing';
+            }
+          }
+        }
+      } else {
+        if (zoomScale <= 1) return;
+
+        if (self.mode === 'moving') {
+          self.handleDrag(ev);
+          self.stageContainer.style.cursor = 'grabbing';
+        }
       }
+
+      self.previousTouchEvent = ev;
     },
 
     mousedownEv(ev) {
       // don't pan on right click
       if (ev.button === 2) return;
+
+      if (ev.touches && ev.touches.length >= 1) {
+        console.log('touch start event in zoom pan tool');
+      }
+
+      self.previousTouchEvent = ev;
 
       self.mode = 'moving';
       self.stageContainer.style.cursor = 'grabbing';

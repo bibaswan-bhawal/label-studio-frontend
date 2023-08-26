@@ -8,7 +8,7 @@ import Canvas from '../utils/canvas';
 import { clamp, findClosestParent } from '../utils/utilities';
 import { DrawingTool } from '../mixins/DrawingTool';
 import { Tool } from '../components/Toolbar/Tool';
-import { Range } from '../common/Range/Range'; 
+import { Range } from '../common/Range/Range';
 import { NodeViews } from '../components/Node/Node';
 import { FF_DEV_3666, FF_DEV_4081, isFF } from '../utils/feature-flags';
 
@@ -23,7 +23,7 @@ const IconDot = ({ size }) => {
       height: size,
       background: 'rgba(0, 0, 0, 0.25)',
       borderRadius: '100%',
-    }}/>
+    }} />
   );
 };
 
@@ -79,8 +79,8 @@ const _Tool = types
           max={MAX_SIZE}
           reverse
           align="vertical"
-          minIcon={<IconDot size={8}/>}
-          maxIcon={<IconDot size={16}/>}
+          minIcon={<IconDot size={8} />}
+          maxIcon={<IconDot size={16} />}
           onChange={(value) => {
             self.setStroke(value);
           }}
@@ -140,10 +140,13 @@ const _Tool = types
 
       mouseupEv(ev, _, [x, y]) {
         if (self.mode !== 'drawing') return;
+
         self.addPoint(x, y);
+
         self.mode = 'viewing';
         brush.setDrawing(false);
         brush.endPath();
+
         if (isFirstBrushStroke) {
           setTimeout(() => {
             const newBrush = self.commitDrawingRegion();
@@ -160,14 +163,12 @@ const _Tool = types
 
       mousemoveEv(ev, _, [x, y]) {
         if (self.mode !== 'drawing') return;
-        if (
-          !findClosestParent(
-            ev.target,
-            el => el === self.obj.stageRef.content,
-            el => el.parentElement,
-          )
-        )
-          return;
+
+        if (ev.touches && ev.touches.length >= 1) {
+          console.log('touch move event in brush tool');
+        }
+
+        if (!findClosestParent(ev.target, el => el === self.obj.stageRef.content, el => el.parentElement)) return;
 
         self.addPoint(x, y);
       },
@@ -181,6 +182,7 @@ const _Tool = types
           )
         )
           return;
+
         const c = self.control;
         const o = self.obj;
 
@@ -189,6 +191,10 @@ const _Tool = types
         // prevent drawing when current image is
         // different from image where the brush was started
         if (o && brush && o.multiImage && o.currentImage !== brush.item_index) return;
+
+        if (ev.touches && ev.touches.length >= 1) {
+          console.log('touch start event in brush tool');
+        }
 
         // Reset the timer if a user started drawing again
         if (brush && brush.type === 'brushregion') {

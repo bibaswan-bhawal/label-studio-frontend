@@ -27,7 +27,7 @@ export const Toolbar = inject('store')(observer(({ store, tools, expanded }) => 
     return 'right';
   }, [toolbar, windowSize]);
 
-  const toolGroups = tools.filter(t => !t.dynamic).reduce((res,tool) => {
+  const toolGroups = tools.filter(t => !t.dynamic).reduce((res, tool) => {
     const group = res[tool.group] ?? [];
 
     group.push(tool);
@@ -49,14 +49,14 @@ export const Toolbar = inject('store')(observer(({ store, tools, expanded }) => 
                 const ToolComponent = tool.viewClass;
 
                 return (
-                  <ToolComponent key={`${tool.toolName}-${i}`}/>
+                  <ToolComponent key={`${tool.toolName}-${i}`} />
                 );
               })}
             </Elem>
           ) : null;
         })}
         {store.autoAnnotation && (
-          <SmartTools tools={smartTools}/>
+          <SmartTools tools={smartTools} />
         )}
       </Block>
     </ToolbarProvider>
